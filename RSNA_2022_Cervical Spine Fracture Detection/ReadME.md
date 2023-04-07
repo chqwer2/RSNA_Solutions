@@ -1,5 +1,7 @@
 # 2nd place solution ： Segmentation + 2.5D CNN + GRU Attention
 
+The code is also available here: https://github.com/ryanyuerong/RSNA2022RAWE
+
 Thanks to Kaggle and RSNA for such a great competition, we are very happy to have finished second. From this complex game, we tried to find the most concise and efficient solution, and gained a lot of knowledge. It was also one of the most hard-drive intensive competition I've ever seen, and we wasted time loading data because we didn't have enough space to save the high-resolution pseudo-label voxel.
 
 To cut to the chase, our solution also consists of two stages, and use 2.5D CNNs, which we learned from [@Awsaf](https://www.kaggle.com/awsaf49) in UWM [UWMGI: 2.5D [Train\] [PyTorch] | Kaggle](https://www .kaggle.com/code/awsaf49/uwmgi-2-5d-train-pytorch) Harvesting a lot.
