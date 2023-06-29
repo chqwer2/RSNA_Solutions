@@ -1,6 +1,7 @@
-from utils.data_utils import *
-from utils.seg_utils1 import *
+# from utils.data_utils import *
+# from utils.seg_utils1 import *
 from CFG import CFG
+from utils.imports import *
 
 # 0 ---> background
 # 1 ---> C1
