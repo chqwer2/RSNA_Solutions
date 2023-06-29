@@ -5,7 +5,7 @@ from utils.CFG import CFG
 
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 datadir = '../../rsna_cervical_spine'
 libdir = '.'

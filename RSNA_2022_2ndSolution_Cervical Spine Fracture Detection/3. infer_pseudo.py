@@ -6,7 +6,7 @@ import os
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 datadir = '../../rsna_cervical_spine'
 libdir = '.'
 outputdir = '.'
