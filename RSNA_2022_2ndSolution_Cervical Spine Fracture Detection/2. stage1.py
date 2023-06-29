@@ -7,7 +7,7 @@ from utils.CFG import CFG
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
-datadir = '../kingston'
+datadir = '../rsna_cervical_spine'
 libdir = '.'
 outputdir = '.'
 otherdir = '.'
