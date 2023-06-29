@@ -40,6 +40,7 @@ train_df.head(3)
 
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print("using device: ", device)
 
 
 # 构造 dataset类
@@ -167,6 +168,7 @@ def dice_coef(y_true, y_pred, thr=0.5, dim=(2,3), epsilon=0.001):
 def train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler, device):
     if CFG.device == 'GPU':
         scaler = GradScaler()
+
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()

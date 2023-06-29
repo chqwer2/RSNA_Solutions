@@ -33,6 +33,7 @@ def get_result(result_df):
 
 # ------------------ Helper --------------------
 
+print("start loading...")
 # Store segmentation paths in a dataframe
 seg_paths = glob(f"{datadir}/segmentations/*")
 seg_df = pd.DataFrame({'path': seg_paths})
@@ -46,6 +47,9 @@ study_uid_list = seg_df["StudyInstanceUID"].tolist()
 dataframe_list = []
 os.makedirs(f"{datadir}/seg_25d_image", exist_ok=True)
 os.makedirs(f"{datadir}/seg_25d_mask", exist_ok=True)
+
+print("finish loading...")
+
 
 for file_name in tqdm(study_uid_list):
     ex_path = f"{datadir}/segmentations/{file_name}.nii"
