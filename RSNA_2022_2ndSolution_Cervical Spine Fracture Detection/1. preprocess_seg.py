@@ -8,8 +8,9 @@ from CFG import CFG
 # ...
 # 8 ---> T1 - T12
 
+outputdir = '.'
 
-datadir = '../rsna_cervical_spine'
+datadir = '../../rsna_cervical_spine'
 
 seed_everything(CFG.seed)
 LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
