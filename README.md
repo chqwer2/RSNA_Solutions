@@ -6,3 +6,6 @@ Sorry I didn't put much information here, but you can find detailed explanation 
 Welcome to email me if you had problem: hao.chen.cs@gmail.com
 
 
+`
+conda activate rsna
+`
