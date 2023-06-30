@@ -1,7 +1,7 @@
 
-train_bs_ = 16 # train_batch_size
-valid_bs_ = 128 # valid_batch_size
-num_workers_ = 5
+# train_bs_ = 16 # train_batch_size
+# valid_bs_ = 128 # valid_batch_size
+# num_workers_ = 5
 
 
 libdir = '.'
@@ -14,9 +14,9 @@ class CFG:
     seed = 42
     device = 'GPU'
     nprocs = 1
-    num_workers = num_workers_
-    train_bs = train_bs_
-    valid_bs = valid_bs_
+    num_workers = 8
+    train_bs = 16
+    valid_bs = 128
     fold_num = 5
 
     target_cols = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "OT"]

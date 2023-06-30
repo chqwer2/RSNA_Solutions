@@ -15,7 +15,7 @@ otherdir = '.'
 CFG.valid_bs = 128
 
 seed_everything(CFG.seed)
-LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
+# LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
 
 if CFG.device=='TPU' and CFG.nprocs==8:
     loginfo = xm.master_print

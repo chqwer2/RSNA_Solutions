@@ -12,8 +12,8 @@ libdir = '.'
 outputdir = '.'
 otherdir = '.'
 
-train_bs_ = 16 # train_batch_size
-valid_bs_ = 32 # valid_batch_size
+train_bs_ = 16    # train_batch_size
+valid_bs_ = 32     # valid_batch_size
 num_workers_ = 5
 seed_everything(CFG.seed)
 LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
