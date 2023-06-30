@@ -26,7 +26,7 @@ train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')
 
 
 
-train_df.columns =["StudyInstanceUID", "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1"]
+train_df.columns =["study_cid", "StudyInstanceUID", "cid", "slice_num_list",   "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1", "label"]
 
 train_df.sort_values(by=["StudyInstanceUID"])
 
@@ -708,6 +708,9 @@ def main():
     oof_df = pd.DataFrame()
     oof_list = []
     for fold, (trn_idx, val_idx) in enumerate(folds):
+        if fold==0:
+            continue
+
         if fold in CFG.fold_list:
             preds, trues = train_loop(train_df, fold, trn_idx, val_idx)
             oof_list.append([preds, trues])

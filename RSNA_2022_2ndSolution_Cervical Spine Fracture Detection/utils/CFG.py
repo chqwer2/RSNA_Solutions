@@ -78,7 +78,7 @@ class stage2_CFG:
     device = 'GPU'
     nprocs = 1  # [1, 8]
     num_workers = 5
-    train_bs = 2
+    train_bs = 2  # 2...
     valid_bs = 4
     fold_num = 5
 
