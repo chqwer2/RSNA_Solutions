@@ -54,9 +54,9 @@ class pseudo_CFG:
     seed = 42
     device = 'GPU'  # ['TPU', 'GPU']
     nprocs = 1  # [1, 8]
-    num_workers = num_workers_
-    train_bs = train_bs_
-    valid_bs = valid_bs_
+    num_workers = 8
+    train_bs = 16
+    valid_bs = 128
     fold_num = 5
 
     target_cols = ["C1", "C2", "C3", "C4", "C5", "C6", "C7", "OT"]
