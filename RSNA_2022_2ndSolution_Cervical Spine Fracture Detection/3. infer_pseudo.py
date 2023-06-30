@@ -320,10 +320,6 @@ for step, (images, file_names, n_slice) in tqdm(enumerate(test_loader),total=len
             voxel_mask.append(slice_mask[start_idx:batch_size])
             # voxels.append(slice_image[start_idx:batch_size])
 
-    # TODO
-    if step > 10:
-         break
-
 voxel_mask = torch.cat(voxel_mask, dim=0)
 if len(voxel_mask) > 0:
     croped_voxel, croped_voxel_mask = crop_voxel(voxel_mask, last_f_name)
@@ -380,7 +376,6 @@ for file_name in tqdm(voxel_crop_df["StudyInstanceUID"].values, total=len(voxel_
 all_slice_df = pd.DataFrame({"StudyInstanceUID":study_id_list, "slice_num":slice_num_list})
 all_slice_df.to_csv(f"{datadir}/all_slice_df.csv", index=False)
 
-# all_slice_df = pd.read_csv(f"{datadir}/all_slice_df.csv")
 
 # train_slice_list.csv
 train_slice_list = pd.read_csv(f"{datadir}/train_slice_list.csv")
