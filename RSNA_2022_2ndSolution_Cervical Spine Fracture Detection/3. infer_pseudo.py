@@ -320,6 +320,7 @@ for step, (images, file_names, n_slice) in tqdm(enumerate(test_loader),total=len
             voxel_mask.append(slice_mask[start_idx:batch_size])
             # voxels.append(slice_image[start_idx:batch_size])
 
+    # TODO
     if step > 10:
          break
 
@@ -366,8 +367,23 @@ voxel_crop_df.to_csv(f"{datadir}/voxel_crop.csv", index=False)
 slice_class_df = pd.DataFrame(slice_class_list, columns=["StudyInstanceUID", "new_slice_num", "old_slice_num", "vertebra_class"]).sort_values(by=["StudyInstanceUID", "new_slice_num"])
 slice_class_df.to_csv(f"{datadir}/slice_class.csv", index=False)
 
+study_id_list = []
+slice_num_list = []
+for file_name in tqdm(voxel_crop_df["StudyInstanceUID"].values, total=len(voxel_crop_df)):
+    train_image_path = glob(f"{datadir}/train_images/{file_name}/*")
+    train_image_path = sorted(train_image_path, key=lambda x:int(x.split("/")[-1].replace(".dcm","")))
+    slice_cnt = len(train_image_path)
 
-all_slice_df = pd.read_csv(f"{datadir}/all_slice_df.csv")
+    study_id_list.extend([file_name]*slice_cnt)
+    slice_num_list.extend([int(x.split("/")[-1].replace(".dcm","")) for x in train_image_path])
+
+all_slice_df = pd.DataFrame({"StudyInstanceUID":study_id_list, "slice_num":slice_num_list})
+all_slice_df.to_csv(f"{datadir}/all_slice_df.csv", index=False)
+
+# all_slice_df = pd.read_csv(f"{datadir}/all_slice_df.csv")
+
+# train_slice_list.csv
+train_slice_list = pd.read_csv(f"{datadir}/train_slice_list.csv")
 
 
 # gen new_df
@@ -376,6 +392,7 @@ new_df = []
 for idx, study_id, _, x0, x1, _, _, _, _, in tqdm(voxel_crop_df.itertuples(), total=len(voxel_crop_df)):
     one_study = all_slice_df[all_slice_df["StudyInstanceUID"] == study_id].reset_index(drop=True)
     new_df.append(one_study[x0:x1])
+
 new_df = pd.concat(new_df, axis=0).reset_index(drop=True)
 
 new_df = new_df.merge(voxel_crop_df, on="StudyInstanceUID", how="left") # merge study_crop_df
