@@ -129,8 +129,8 @@ from albumentations import (
     CenterCrop, Resize, RandomCrop, GaussianBlur, JpegCompression, Downscale, ElasticTransform
 )
 import albumentations
-
 from albumentations.pytorch import ToTensorV2
+
 
 def get_transforms(data):
     if data == 'train':
@@ -352,21 +352,19 @@ for file_name in tqdm(seg_gt_list):
 # --------- post progress
 
 
-voxel_crop_df = pd.read_csv(f"{datadir}/voxel_crop.csv")
-# voxel_crop_df = pd.DataFrame(voxel_crop_list, columns=["StudyInstanceUID", "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1"]).sort_values(by=["StudyInstanceUID"])
-# voxel_crop_df.to_csv(f"{datadir}/voxel_crop.csv", index=False)
-voxel_crop_df # 每个study的整体crop坐标
+# voxel_crop_df = pd.read_csv(f"{datadir}/voxel_crop.csv")
+voxel_crop_df = pd.DataFrame(voxel_crop_list, columns=["StudyInstanceUID", "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1"]).sort_values(by=["StudyInstanceUID"])
+voxel_crop_df.to_csv(f"{datadir}/voxel_crop.csv", index=False)
 
 
-slice_class_df = pd.read_csv(f"{datadir}/slice_class.csv")
-# slice_class_df = pd.DataFrame(slice_class_list, columns=["StudyInstanceUID", "new_slice_num", "old_slice_num", "vertebra_class"]).sort_values(by=["StudyInstanceUID", "new_slice_num"])
-# slice_class_df.to_csv(f"{datadir}/slice_class.csv", index=False)
-slice_class_df # 每张slice的所属vertebra_class(preds)
+
+# slice_class_df = pd.read_csv(f"{datadir}/slice_class.csv")
+slice_class_df = pd.DataFrame(slice_class_list, columns=["StudyInstanceUID", "new_slice_num", "old_slice_num", "vertebra_class"]).sort_values(by=["StudyInstanceUID", "new_slice_num"])
+slice_class_df.to_csv(f"{datadir}/slice_class.csv", index=False)
 
 
 all_slice_df = pd.read_csv(f"{datadir}/all_slice_df.csv")
-print(all_slice_df.shape)
-all_slice_df.head(3)
+
 
 # gen new_df
 
@@ -381,7 +379,7 @@ new_df = new_df.merge(voxel_crop_df, on="StudyInstanceUID", how="left") # merge 
 assert len(slice_class_df) == len(new_df)
 
 new_slice_df = pd.concat([new_df, slice_class_df[["new_slice_num", "vertebra_class"]]], axis=1)
-new_slice_df # 合并 class
+
 
 
 tr_df = pd.read_csv(f"{datadir}/train.csv")
