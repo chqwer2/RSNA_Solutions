@@ -348,8 +348,6 @@ for file_name in tqdm(seg_gt_list):
 
 
 
-
-
 # --------- post progress
 
 
@@ -417,10 +415,11 @@ for study_id in tqdm(np.unique(new_slice_df1["StudyInstanceUID"])):
             continue
         slice_num_list = one_study_cid["slice_num"].values.tolist()
         arow = one_study_cid.iloc[0]
-        vertebrae_df_list.append([f"{study_id}_{cid}", study_id, cid, slice_num_list, arow["before_image_size"], \
+        vertebrae_df_list.append([
+            f"{study_id}_{cid}", study_id, cid, slice_num_list, arow["before_image_size"], \
             arow["x0"], arow["x1"], arow["y0"], arow["y1"], arow["z0"], arow["z1"], arow[f"C{cid}"]])
 
-# TODO
+
 vertebrae_df = pd.DataFrame(vertebrae_df_list)
 vertebrae_df.to_pickle(f"{datadir}/vertebrae_df.pkl")
 

@@ -22,6 +22,17 @@ num_workers_ = 5
 
 # Helper
 train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')
+
+
+
+
+train_df.columns =["StudyInstanceUID", "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1"]
+
+train_df.sort_values(by=["StudyInstanceUID"])
+
+
+print("traindf:", train_df.head(5))
+
 submission_df = pd.read_csv(f'{datadir}/sample_submission.csv')
 
 train_df = train_df[~train_df["StudyInstanceUID"].isin(["1.2.826.0.1.3680043.20574", "1.2.826.0.1.3680043.29952"]) ].reset_index(drop=True)
