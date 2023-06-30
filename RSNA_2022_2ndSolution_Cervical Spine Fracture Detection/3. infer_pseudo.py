@@ -17,12 +17,12 @@ CFG.valid_bs = 128
 seed_everything(CFG.seed)
 # LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
 
-if CFG.device=='TPU' and CFG.nprocs==8:
-    loginfo = xm.master_print
-    cusprint = xm.master_print
-else:
-    loginfo = LOGGER.info
-    cusprint = print
+# if CFG.device=='TPU' and CFG.nprocs==8:
+#     loginfo = xm.master_print
+#     cusprint = xm.master_print
+# else:
+#     loginfo = LOGGER.info
+#     cusprint = print
 
 def get_result(result_df):
     preds = result_df[[f'pred_{c}' for c in CFG.target_cols]].values
