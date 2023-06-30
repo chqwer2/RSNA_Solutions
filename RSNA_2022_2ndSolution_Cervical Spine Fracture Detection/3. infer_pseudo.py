@@ -319,6 +319,10 @@ for step, (images, file_names, n_slice) in tqdm(enumerate(test_loader),total=len
         elif bs_idx == batch_size-1:
             voxel_mask.append(slice_mask[start_idx:batch_size])
             # voxels.append(slice_image[start_idx:batch_size])
+
+    if step > 10:
+         break
+
 voxel_mask = torch.cat(voxel_mask, dim=0)
 if len(voxel_mask) > 0:
     croped_voxel, croped_voxel_mask = crop_voxel(voxel_mask, last_f_name)
