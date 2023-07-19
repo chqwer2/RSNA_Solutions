@@ -93,8 +93,10 @@ class stage2_CFG:
 
     suffix = "406"
     fold_list = [0, 1, 2, 3, 4]
-    epochs = 20
-    model_arch = "resnest50d"  # tf_efficientnetv2_s, resnest50d
+    epochs = 10
+    model_arch = 'tf_efficientnetv2_s'
+    # "resnest50d"  # , resnest50d
+
     img_size = 400
     optimizer = "AdamW"
     scheduler = "CosineAnnealingLR"
