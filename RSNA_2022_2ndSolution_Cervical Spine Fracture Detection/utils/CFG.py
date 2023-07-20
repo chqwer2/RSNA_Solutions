@@ -78,7 +78,7 @@ class stage2_CFG:
     device = 'GPU'
     nprocs = 1  # [1, 8]
     num_workers = 5
-    train_bs = 2  # 2...
+    train_bs = 2
     valid_bs = 4
     fold_num = 5
 
@@ -94,7 +94,8 @@ class stage2_CFG:
     suffix = "406"
     fold_list = [0, 1, 2, 3, 4]
     epochs = 10
-    model_arch = 'tf_efficientnetv2_s'
+    model_arch = # nfnet/ convnext
+    # 'tf_efficientnetv2_s'
     # "resnest50d"  # , resnest50d
 
     img_size = 400

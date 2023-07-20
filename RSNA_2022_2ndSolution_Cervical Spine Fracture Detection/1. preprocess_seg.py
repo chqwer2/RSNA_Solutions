@@ -19,6 +19,7 @@ LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
 if CFG.device=='TPU' and CFG.nprocs==8:
     loginfo = xm.master_print
     cusprint = xm.master_print
+
 else:
     loginfo = LOGGER.info
     cusprint = print
@@ -96,4 +97,6 @@ for idx, (train_index, test_index) in enumerate(gkf.split(X=seg_25d_df, groups=s
         print(f"fold{i} num: {study_num}")
 
     seg_25d_df.to_csv(f"{datadir}/seg_25d.csv", index=False)
+
+
 

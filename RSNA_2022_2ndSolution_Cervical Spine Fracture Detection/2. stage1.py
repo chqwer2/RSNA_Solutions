@@ -12,9 +12,8 @@ libdir = '.'
 outputdir = '.'
 otherdir = '.'
 
-train_bs_ = 16    # train_batch_size
-valid_bs_ = 32     # valid_batch_size
-num_workers_ = 5
+
+
 seed_everything(CFG.seed)
 LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
 
@@ -105,6 +104,7 @@ def get_transforms(data):
                             min_holes=5, fill_value=0, mask_fill_value=0, p=0.5),
             ], p=1.0)
 
+
     elif data == 'light_train':
         return Compose([
             Resize(CFG.img_size, CFG.img_size, interpolation=cv2.INTER_NEAREST),
@@ -190,14 +190,19 @@ def train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler,
             if CFG.accum_iter > 1:
                 loss = loss / CFG.accum_iter
             scaler.scale(loss).backward()
+
             grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), CFG.max_grad_norm)
             if (step + 1) % CFG.accum_iter == 0:
                 scaler.step(optimizer)
                 scaler.update()
                 optimizer.zero_grad()
+
+
         elif CFG.device == 'TPU':
             y_preds = model(images)
+
             loss = criterion(y_preds, masks)
+
             # record loss
             losses.update(loss.item(), batch_size)
             if CFG.accum_iter > 1:
@@ -403,7 +408,7 @@ def train_loop(df, fold):
 
         if CFG.device == 'GPU':
             torch.save({'model': model.state_dict()},
-                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_loss={avg_val_loss}.pth')
         elif CFG.device == 'TPU':
             xm.save({'model': model.state_dict()},
                     outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
@@ -419,7 +424,7 @@ def train_loop(df, fold):
         if valid_acc_max_cnt >= CFG.n_early_stopping:
             if CFG.device == 'GPU':
                 torch.save({'model': model.state_dict()},
-                           outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                           outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_loss={avg_val_loss}.pth')
             elif CFG.device == 'TPU':
                 xm.save({'model': model.state_dict()},
                         outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
@@ -428,7 +433,7 @@ def train_loop(df, fold):
 
         if CFG.device == 'GPU':
             torch.save({'model': model.state_dict()},
-                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_loss={avg_val_loss}.pth')
         elif CFG.device == 'TPU':
             xm.save({'model': model.state_dict()},
                     outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
