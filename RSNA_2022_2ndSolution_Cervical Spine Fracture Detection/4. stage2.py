@@ -556,6 +556,7 @@ def valid_one_epoch(valid_loader, model, criterion, device):
     print(f"predictions.shape: {predictions.shape}")
     score = nn.BCEWithLogitsLoss()(torch.from_numpy(predictions).type(torch.float32),
                                    torch.from_numpy(trues).type(torch.float32))
+
     return losses.avg, predictions, trues, score
 
 
@@ -689,19 +690,19 @@ def train_loop(df, fold, trn_idx, val_idx):
         if valid_loss_min_cnt >= CFG.n_early_stopping:
             if CFG.device == 'GPU':
                 torch.save({'model': model.state_dict()},
-                           outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                           outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
             elif CFG.device == 'TPU':
                 xm.save({'model': model.state_dict()},
-                        outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                        outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
             print("early_stopping")
             break
 
         if CFG.device == 'GPU':
             torch.save({'model': model.state_dict()},
-                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
         elif CFG.device == 'TPU':
             xm.save({'model': model.state_dict()},
-                    outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
+                    outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
 
     return preds, trues
 

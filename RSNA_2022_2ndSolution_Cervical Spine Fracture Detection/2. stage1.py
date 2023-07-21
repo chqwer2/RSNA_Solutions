@@ -24,6 +24,7 @@ else:
     loginfo = LOGGER.info
     cusprint = print
 
+
 def get_result(result_df):
     preds = result_df[[f'pred_{c}' for c in CFG.target_cols]].values
     labels = result_df[CFG.target_cols].values
@@ -54,9 +55,9 @@ class TrainDataset(Dataset):
 
     def __getitem__(self, idx):
         file_name = self.file_names[idx]
-        image = np.load(f"{datadir}/seg_25d_image/{file_name}.npy")  # 512 * 512 * 3
-        mask = np.load(f"{datadir}/seg_25d_mask/{file_name}.npy")  # 512 * 512 * 3
-
+        image = np.load(f"{datadir}/seg_25d_image/{file_name}.npy")     # 512 * 512 * 3
+        mask = np.load(f"{datadir}/seg_25d_mask/{file_name}.npy")       # 512 * 512 * 3
+        # mask value 1~8
         # transform
         if self.transform:
             augmented = self.transform(image=image, mask=mask)
@@ -64,11 +65,16 @@ class TrainDataset(Dataset):
             mask = augmented['mask']
 
         image = image / 255.0
+        if idx == 36:
+            print("DEBUG Norm:", image.shape, image.max(), image.min())
+            print("DEBUG Mask value:", mask.shape, mask.max(), mask.min())
 
         real_mask = np.zeros([CFG.num_classes, CFG.img_size, CFG.img_size])  # 8 * img_size * img_size
+
         for idx in range(CFG.num_classes):
-            mask_bool = (mask[:, :, 1] == (idx + 1))
-            real_mask[idx] = mask_bool
+            mask_bool = (mask[:, :, 1] == (idx + 1)) # the center slide
+            real_mask[idx] = mask_bool   # separate mask into 8 channels
+
 
         image = np.transpose(image, (2, 0, 1))  # 3 * img_size * img_size
         mask = np.transpose(mask, (2, 0, 1))  # 3 * img_size * img_size
@@ -141,6 +147,7 @@ def build_model():
     model.to(device)
     return model
 
+
 def load_model(path):
     model = build_model()
     model.load_state_dict(torch.load(path))
@@ -155,6 +162,8 @@ DiceLoss    = smp.losses.DiceLoss(mode='multilabel')
 BCELoss     = smp.losses.SoftBCEWithLogitsLoss()
 LovaszLoss  = smp.losses.LovaszLoss(mode='multilabel', per_image=False)
 TverskyLoss = smp.losses.TverskyLoss(mode='multilabel', log_loss=False)
+
+
 
 def dice_coef(y_true, y_pred, thr=0.5, dim=(2,3), epsilon=0.001):
     y_true = y_true.to(torch.float32)
