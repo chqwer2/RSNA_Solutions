@@ -23,14 +23,11 @@ num_workers_ = 5
 
 
 # Helper
-train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')
-
-
-
-
-train_df.columns =["study_cid", "StudyInstanceUID", "cid", "slice_num_list",   "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1", "label"]
-
+train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')           # TODO: train
+train_df.columns = ["study_cid", "StudyInstanceUID", "cid", "slice_num_list",   "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1", "label"]
 train_df.sort_values(by=["StudyInstanceUID"])
+
+# "label" is the score of Cx
 
 
 print("traindf:", train_df.head(5))
@@ -43,10 +40,7 @@ gkf = GroupKFold(n_splits=CFG.fold_num)
 folds = gkf.split(X=train_df, y=None, groups=train_df['StudyInstanceUID'])
 
 
-
-
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
 
 seed_everything(CFG.seed)
 LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
@@ -63,8 +57,6 @@ def get_result(result_df):
     labels = result_df[CFG.target_cols].values
     score, scores = get_score(labels, preds)
     LOGGER.info(f'Score: {score:<.4f}  Scores: {np.round(scores, decimals=4)}')
-
-
 
 
 
@@ -327,7 +319,7 @@ class RSNAClassifier(nn.Module):
         return pred
 
 
-model = RSNAClassifier(CFG.model_arch, hidden_dim=256, seq_len=24, pretrained=True)
+# model = RSNAClassifier(CFG.model_arch, hidden_dim=256, seq_len=24, pretrained=True)
 
 
 def get_activation(activ_name: str = "relu"):

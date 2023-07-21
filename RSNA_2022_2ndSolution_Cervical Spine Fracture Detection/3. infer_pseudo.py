@@ -406,13 +406,17 @@ sample_num = 24
 vertebrae_df_list = []
 for study_id in tqdm(np.unique(new_slice_df1["StudyInstanceUID"])):
     one_study = new_slice_df1[new_slice_df1["StudyInstanceUID"] == study_id].reset_index(drop=True)
+
     for cid in range(1, 8):
         one_study_cid = one_study[one_study["vertebra_class"] == cid].reset_index(drop=True)
+
         if len(one_study_cid) >= sample_num:
             sample_index = np.linspace(0, len(one_study_cid)-1, sample_num, dtype=int)
             one_study_cid = one_study_cid.iloc[sample_index].reset_index(drop=True)
+
         if len(one_study_cid) < 1:
             continue
+
         slice_num_list = one_study_cid["slice_num"].values.tolist()
         arow = one_study_cid.iloc[0]
         vertebrae_df_list.append([

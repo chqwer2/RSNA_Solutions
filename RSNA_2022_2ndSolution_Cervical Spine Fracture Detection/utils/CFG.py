@@ -94,8 +94,8 @@ class stage2_CFG:
     suffix = "406"
     fold_list = [0, 1, 2, 3, 4]
     epochs = 10
-    model_arch = 'tf_efficientnetv2_s'  # nfnet/ convnext
-    #
+    model_arch = 'tf_efficientnetv2_s'    # nfnet/ convnext
+
     # "resnest50d"  # , resnest50d
 
     img_size = 400
@@ -118,3 +118,5 @@ class stage2_CFG:
     n_early_stopping = 5
     debug = False
     multihead = False
+
+    
