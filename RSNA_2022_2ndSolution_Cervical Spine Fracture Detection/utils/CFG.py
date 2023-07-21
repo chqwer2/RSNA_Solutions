@@ -93,7 +93,7 @@ class stage2_CFG:
 
     suffix = "406"
     fold_list = [0, 1, 2, 3, 4]
-    epochs = 10
+    epochs = 15
     model_arch = 'tf_efficientnetv2_s'    # nfnet/ convnext
 
     # "resnest50d"  # , resnest50d
@@ -119,4 +119,3 @@ class stage2_CFG:
     debug = False
     multihead = False
 
-    
