@@ -7,6 +7,8 @@ from utils.CFG import stage2_CFG as CFG
 
 
 
+
+
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -260,17 +262,12 @@ class MLPAttentionNetwork(nn.Module):
         H = torch.tanh(self.proj_w(x))  # (batch_size, seq_len, hidden_dim)
         # print(f"H shape:{H.shape}")
 
-        # att_scores = torch.softmax(self.proj_v(H), axis=1)  # (batch_size, seq_len)
-        att_scores = torch.sigmoid(self.proj_v(H))
-
+        att_scores = torch.softmax(self.proj_v(H), axis=1)  # (batch_size, seq_len)
         # print(f"att_scores shape:{att_scores.shape}")
 
-        attn_x = (x * att_scores + x).mean(1)  # (batch_size, hidden_dim)
-        # flattent
-
-
-        # print(f"attn_x shape:{attn_x.shape}, x shape: {x.shape}")
-        return attn_x #+ x
+        attn_x = (x * att_scores).sum(1)  # (batch_size, hidden_dim)
+        # print(f"attn_x shape:{attn_x.shape}")
+        return attn_x
 
 
 class RSNAClassifier(nn.Module):
@@ -282,50 +279,30 @@ class RSNAClassifier(nn.Module):
         if 'efficientnet' in CFG.model_arch:
             cnn_feature = self.model.classifier.in_features
             self.model.classifier = nn.Identity()
-
         elif "res" in CFG.model_arch:
             cnn_feature = self.model.fc.in_features
             self.model.global_pool = nn.Identity()
             self.model.fc = nn.Identity()
             self.pooling = nn.AdaptiveAvgPool2d(1)
 
-        self.spatialdropout = SpatialDropout(CFG.dropout)   # 0.1
-
-
-        # self.gru = nn.GRU(cnn_feature, hidden_dim, 2, batch_first=True, bidirectional=True)
-        #
-        # self.mlp_attention_layer = MLPAttentionNetwork(2 * hidden_dim)
-        #
-        # self.logits = nn.Sequential(
-        #     nn.Linear(hidden_dim * 2, 128),
-        #     nn.ReLU(),
-        #     nn.Dropout(CFG.dropout),
-        #     nn.Linear(128, 1)
-        #
-        # )
-
-        # self.gru = nn.GRU(cnn_feature, hidden_dim, 2, batch_first=True, bidirectional=True)
-
-        self.mlp_attention_layer = MLPAttentionNetwork(cnn_feature)
-
+        self.spatialdropout = SpatialDropout(CFG.dropout)
+        self.gru = nn.GRU(cnn_feature, hidden_dim, 2, batch_first=True, bidirectional=True)
+        self.mlp_attention_layer = MLPAttentionNetwork(2 * hidden_dim)
         self.logits = nn.Sequential(
-            nn.Linear(cnn_feature, 128),
+            nn.Linear(hidden_dim * 2, 128),
             nn.ReLU(),
             nn.Dropout(CFG.dropout),
             nn.Linear(128, 1)
-
         )
 
-
-
-        for n, m in self.named_modules():
-            if isinstance(m, nn.GRU):
-                print(f"init {m}")
-                for param in m.parameters():
-                    if len(param.shape) >= 2:
-                        nn.init.orthogonal_(param.data)
-                    else:
-                        nn.init.normal_(param.data)
+        # for n, m in self.named_modules():
+        #     if isinstance(m, nn.GRU):
+        #         print(f"init {m}")
+        #         for param in m.parameters():
+        #             if len(param.shape) >= 2:
+        #                 nn.init.orthogonal_(param.data)
+        #             else:
+        #                 nn.init.normal_(param.data)
 
     def forward(self, x):  # (B, seq_len, H, W)
         bs = x.size(0)
@@ -336,14 +313,8 @@ class RSNAClassifier(nn.Module):
         features = self.spatialdropout(features)  # (B*seq_len, cnn_feature)
         # print(features.shape)
         features = features.reshape(bs, self.seq_len, -1)  # (B, seq_len, cnn_feature)
-
-
-        # features, _ = self.gru(features)  # (B, seq_len, hidden_dim*2)
-
-
+        features, _ = self.gru(features)  # (B, seq_len, hidden_dim*2)
         atten_out = self.mlp_attention_layer(features)  # (B, hidden_dim*2)
-
-
         pred = self.logits(atten_out)  # (B, 1)
         pred = pred.view(bs, -1)  # (B, 1)
         return pred
