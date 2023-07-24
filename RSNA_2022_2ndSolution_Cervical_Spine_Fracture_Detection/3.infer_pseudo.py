@@ -526,7 +526,7 @@ for file_name in tqdm(seg_gt_list):
     mask = np.clip(mask, 0, 8).astype(np.uint8)
     mask = np.where(mask == 8, 0, mask)
     mask = np.ascontiguousarray(mask)  # 512*512*slice
-    print("mask:", mask.shape, mask.max())  # (512, 512, 195) 7
+    # print("mask:", mask.shape, mask.max())  # (512, 512, 195) 7
 
     if mask.shape[0] != 512 or mask.shape[1] != 512:
         mask = cv2.resize(mask, (512, 512), interpolation=cv2.INTER_NEAREST)
@@ -534,6 +534,8 @@ for file_name in tqdm(seg_gt_list):
     assert mask.shape[1] == mask.shape[2] == 512
     mask = torch.from_numpy(mask).to(device, dtype=torch.uint8)
     croped_voxel, croped_voxel_mask = crop_voxel(mask, file_name)
+
+
 
 # %% [markdown]
 # # post-progress
@@ -602,7 +604,6 @@ new_df  # 所有包含vertebra的slice
 
 # %% [code] {"execution":{"iopub.status.busy":"2023-07-20T15:17:00.060474Z","iopub.status.idle":"2023-07-20T15:17:00.061139Z","shell.execute_reply.started":"2023-07-20T15:17:00.060853Z","shell.execute_reply":"2023-07-20T15:17:00.060880Z"}}
 new_df = new_df.merge(voxel_crop_df, on="StudyInstanceUID", how="left")  # merge study_crop_df
-display(new_df)  # 合并了study的crop信息
 assert len(slice_class_df) == len(new_df)
 
 # %% [markdown]
