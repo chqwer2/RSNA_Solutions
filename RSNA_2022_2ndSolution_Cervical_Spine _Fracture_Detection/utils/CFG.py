@@ -73,6 +73,7 @@ class pseudo_CFG:
     weight_path = f"{outputdir}/efficientnet-b0_109_fold0_epoch13.pth"
 
 
+
 class stage2_CFG:
     seed = 42
     device = 'GPU'
@@ -109,7 +110,7 @@ class stage2_CFG:
     T_max = epochs - warmup_epo - 2
 
     seq_len = 24
-    lr = 5e-5
+    lr = 5e-3
     min_lr = 1e-7
     weight_decay = 0
     dropout = 0.1

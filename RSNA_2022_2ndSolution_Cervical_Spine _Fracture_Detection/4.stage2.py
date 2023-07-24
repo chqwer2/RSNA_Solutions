@@ -7,8 +7,6 @@ from utils.CFG import stage2_CFG as CFG
 
 
 
-
-
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -97,6 +95,7 @@ class TrainDataset(Dataset):
         for s_num in slice_num_list:
             path = f"{datadir}/train_images/{study_id}/{s_num}.dcm"
             img = load_dicom(path)
+
             if len(slice_list) == 0:
                 imgh = img.shape[0]
                 imgw = img.shape[1]
