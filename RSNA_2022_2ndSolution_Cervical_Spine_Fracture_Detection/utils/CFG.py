@@ -95,6 +95,7 @@ class stage2_CFG:
     suffix = "406"
     fold_list = [0, 1, 2, 3, 4]
     epochs = 15
+
     model_arch = 'tf_efficientnetv2_s'    # nfnet/ convnext
 
     # "resnest50d"  # , resnest50d
@@ -110,7 +111,7 @@ class stage2_CFG:
     T_max = epochs - warmup_epo - 2
 
     seq_len = 24
-    lr = 5e-3
+    lr = 5e-5
     min_lr = 1e-7
     weight_decay = 0
     dropout = 0.1
