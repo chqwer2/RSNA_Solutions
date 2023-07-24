@@ -334,7 +334,7 @@ class RSNAClassifier(nn.Module):
         features = features.reshape(bs, self.seq_len, -1)  # (B, seq_len, cnn_feature)
 
 
-        features, _ = self.gru(features)  # (B, seq_len, hidden_dim*2)
+        # features, _ = self.gru(features)  # (B, seq_len, hidden_dim*2)
 
 
         atten_out = self.mlp_attention_layer(features)  # (B, hidden_dim*2)
