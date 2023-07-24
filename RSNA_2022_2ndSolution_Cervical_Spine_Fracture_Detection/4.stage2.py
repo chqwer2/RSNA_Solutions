@@ -1,18 +1,16 @@
 
-
-
 from utils.imports import *
 from utils.CFG import stage2_CFG as CFG
 
 
-
-
-
-
+# %% [code]
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 datadir = '../../rsna_cervical_spine'
+
+
+
 libdir = '.'
 outputdir = '.'
 otherdir = '.'
@@ -21,43 +19,221 @@ valid_bs_ = 4
 num_workers_ = 5
 
 
+# %% [code]
+class CFG:
+    seed = 42
+    device = 'GPU'
+    nprocs = 1  # [1, 8]
+    num_workers = num_workers_
+    train_bs = train_bs_
+    valid_bs = valid_bs_
+    fold_num = 5
 
-# Helper
-train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')           # TODO: train
-train_df.columns = ["study_cid", "StudyInstanceUID", "cid", "slice_num_list",   "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1", "label"]
-train_df.sort_values(by=["StudyInstanceUID"])
+    target_cols = ["C1", "C2", "C3", "C4", "C5", "C6", "C7"]
+    num_classes = 7
 
-# "label" is the score of Cx
+    accum_iter = 4
+    max_grad_norm = 1000
+    print_freq = 100
+    normalize_mean = [0.4824, 0.4824, 0.4824]  # [0.485, 0.456, 0.406] [0.4824, 0.4824, 0.4824]
+    normalize_std = [0.22, 0.22, 0.22]  # [0.229, 0.224, 0.225] [0.22, 0.22, 0.22]
+
+    suffix = "406"
+    fold_list = [0, 1, 2, 3, 4]
+    epochs = 20
+    model_arch = "resnest50d"  # tf_efficientnetv2_s, resnest50d
+    img_size = 400
+    optimizer = "AdamW"
+    scheduler = "CosineAnnealingLR"
+    loss_fn = "BCEWithLogitsLoss"
+    scheduler_warmup = "GradualWarmupSchedulerV3"
+
+    warmup_epo = 1
+    warmup_factor = 10
+    T_max = epochs - warmup_epo - 2
+
+    seq_len = 24
+    lr = 5e-5
+    min_lr = 1e-7
+    weight_decay = 0
+    dropout = 0.1
+
+    gpu_parallel = False
+    n_early_stopping = 5
+    debug = False
+    multihead = False
 
 
-print("traindf:", train_df.head(5))
+# %% [markdown]
+# # Import
 
+# %% [code]
+import sys;
+
+package_paths = [f'{libdir}pytorch-image-models-master']
+for pth in package_paths:
+    sys.path.append(pth)
+
+import ast
+from glob import glob
+import cv2
+from skimage import io
+import os
+from datetime import datetime
+import time
+import random
+from tqdm import tqdm
+from contextlib import contextmanager
+import math
+
+import numpy as np
+import pandas as pd
+import sklearn
+from sklearn.metrics import roc_auc_score, log_loss
+from sklearn import metrics
+from sklearn.model_selection import GroupKFold, StratifiedKFold
+import torch
+import torchvision
+from torchvision import transforms
+from torch import nn
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.sampler import SequentialSampler, RandomSampler
+from torch.nn.modules.loss import _WeightedLoss
+import torch.nn.functional as F
+import matplotlib.pyplot as plt
+
+from torch.optim import Adam, SGD, AdamW
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts, CosineAnnealingLR, ReduceLROnPlateau
+from warmup_scheduler import GradualWarmupScheduler
+import timm
+import warnings
+import joblib
+from scipy.ndimage.interpolation import zoom
+import nibabel as nib
+import pydicom as dicom
+import gc
+from torch.nn import DataParallel
+
+
+from torch.cuda.amp import autocast, GradScaler
+
+# %% [markdown]
+# # helper
+
+# %% [code]
+train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')
 submission_df = pd.read_csv(f'{datadir}/sample_submission.csv')
 
-train_df = train_df[~train_df["StudyInstanceUID"].isin(["1.2.826.0.1.3680043.20574", "1.2.826.0.1.3680043.29952"]) ].reset_index(drop=True)
+train_df = train_df[
+    ~train_df["StudyInstanceUID"].isin(["1.2.826.0.1.3680043.20574", "1.2.826.0.1.3680043.29952"])].reset_index(
+    drop=True)
 
 gkf = GroupKFold(n_splits=CFG.fold_num)
 folds = gkf.split(X=train_df, y=None, groups=train_df['StudyInstanceUID'])
 
 
+
+# %% [code]
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-seed_everything(CFG.seed)
-LOGGER = init_logger(outputdir+f'/train{CFG.suffix}.log')
 
-if CFG.device=='TPU' and CFG.nprocs==8:
+# %% [code]
+def seed_everything(seed=42):
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
+
+
+seed_everything(CFG.seed)
+
+
+def get_score(y_true, y_pred):
+    scores = []
+    for i in range(y_true.shape[1]):
+        score = roc_auc_score(y_true[:, i], y_pred[:, i])
+        scores.append(score)
+    avg_score = np.mean(scores)
+    return avg_score, scores
+
+
+@contextmanager
+def timer(name):
+    t0 = time.time()
+    LOGGER.info(f'[{name}] start')
+    yield
+    LOGGER.info(f'[{name}] done in {time.time() - t0:.0f} s.')
+
+
+def init_logger(log_file=outputdir + 'stage2_train.log'):
+    from logging import getLogger, INFO, FileHandler, Formatter, StreamHandler
+    logger = getLogger(__name__)
+    logger.setLevel(INFO)
+    handler1 = StreamHandler()
+    handler1.setFormatter(Formatter("%(message)s"))
+    handler2 = FileHandler(filename=log_file)
+    handler2.setFormatter(Formatter("%(message)s"))
+    logger.addHandler(handler1)
+    logger.addHandler(handler2)
+    return logger
+
+
+LOGGER = init_logger(outputdir + f'/stage2_train{CFG.suffix}.log')
+
+if CFG.device == 'TPU' and CFG.nprocs == 8:
     loginfo = xm.master_print
     cusprint = xm.master_print
 else:
     loginfo = LOGGER.info
     cusprint = print
 
-def get_result(result_df):
-    preds = result_df[[f'pred_{c}' for c in CFG.target_cols]].values
-    labels = result_df[CFG.target_cols].values
-    score, scores = get_score(labels, preds)
-    LOGGER.info(f'Score: {score:<.4f}  Scores: {np.round(scores, decimals=4)}')
 
+def get_timediff(time1, time2):
+    minute_, second_ = divmod(time2 - time1, 60)
+    return f"{int(minute_):02d}:{int(second_):02d}"
+
+
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+
+def asMinutes(s):
+    m = math.floor(s / 60)
+    s -= m * 60
+    return '%dm %ds' % (m, s)
+
+
+def timeSince(since, percent):
+    now = time.time()
+    s = now - since
+    es = s / (percent)
+    rs = es - s
+    return '%s (remain %s)' % (asMinutes(s), asMinutes(rs))
+
+
+def get_img(path):
+    im_bgr = cv2.imread(path)
+    im_rgb = im_bgr[:, :, ::-1]
+    return im_rgb
 
 
 def load_dicom(path):
@@ -75,6 +251,10 @@ def load_dicom(path):
     return data
 
 
+# %% [markdown]
+# # DataSet
+
+# %% [code]
 class TrainDataset(Dataset):
     def __init__(self, df, transform=None):
         self.df = df
@@ -97,7 +277,6 @@ class TrainDataset(Dataset):
         for s_num in slice_num_list:
             path = f"{datadir}/train_images/{study_id}/{s_num}.dcm"
             img = load_dicom(path)
-
             if len(slice_list) == 0:
                 imgh = img.shape[0]
                 imgw = img.shape[1]
@@ -121,6 +300,7 @@ class TrainDataset(Dataset):
         return torch.from_numpy(image), torch.tensor(row['label']).float()
 
 
+# %% [code]
 from albumentations import (
     HorizontalFlip, VerticalFlip, IAAPerspective, ShiftScaleRotate, CLAHE, RandomRotate90,
     Transpose, ShiftScaleRotate, Blur, OpticalDistortion, GridDistortion, HueSaturationValue,
@@ -188,6 +368,34 @@ def get_transforms(*, data):
         ])
 
 
+# %% [code]
+from pylab import rcParams
+
+dataset_show = TrainDataset(
+    train_df,
+    transform=get_transforms(data='light_train')  # None, get_transforms(data='check')
+)
+rcParams['figure.figsize'] = 30, 20
+for i in range(2):
+    f, axarr = plt.subplots(1, 5)
+    idx = np.random.randint(0, len(dataset_show))
+    img, label = dataset_show[idx]
+    # axarr[p].imshow(img) # transform=None
+    axarr[0].imshow(img[0]);
+    plt.axis('OFF');
+    axarr[1].imshow(img[1]);
+    plt.axis('OFF');
+    axarr[2].imshow(img[2]);
+    plt.axis('OFF');
+    axarr[3].imshow(img[3]);
+    plt.axis('OFF');
+    axarr[4].imshow(img[4]);
+    plt.axis('OFF');
+
+# %% [markdown]
+# # Model
+
+# %% [code]
 import torch.nn as nn
 from itertools import repeat
 
@@ -270,6 +478,7 @@ class MLPAttentionNetwork(nn.Module):
         return attn_x
 
 
+# %% [code]
 class RSNAClassifier(nn.Module):
     def __init__(self, model_arch, hidden_dim=256, seq_len=24, pretrained=False):
         super().__init__()
@@ -320,9 +529,11 @@ class RSNAClassifier(nn.Module):
         return pred
 
 
-# model = RSNAClassifier(CFG.model_arch, hidden_dim=256, seq_len=24, pretrained=True)
+# %% [code]
+model = RSNAClassifier(CFG.model_arch, hidden_dim=256, seq_len=24, pretrained=True)
 
 
+# %% [code]
 def get_activation(activ_name: str = "relu"):
     """"""
     act_dict = {
@@ -439,6 +650,7 @@ class MultiHeadResNet200D(nn.Module):
         return None, None, y
 
 
+# %% [code]
 def train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler, device):
     if CFG.device == 'GPU':
         scaler = GradScaler()
@@ -504,6 +716,7 @@ def train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler,
     return losses.avg, optimizer.param_groups[0]["lr"]
 
 
+# %% [code]
 def valid_one_epoch(valid_loader, model, criterion, device):
     batch_time = AverageMeter()
     data_time = AverageMeter()
@@ -549,15 +762,17 @@ def valid_one_epoch(valid_loader, model, criterion, device):
     print(f"predictions.shape: {predictions.shape}")
     score = nn.BCEWithLogitsLoss()(torch.from_numpy(predictions).type(torch.float32),
                                    torch.from_numpy(trues).type(torch.float32))
-
     return losses.avg, predictions, trues, score
 
 
+# %% [markdown]
+# # loss & optimizer & scheduler
 
-
+# %% [code]
 class GradualWarmupSchedulerV3(GradualWarmupScheduler):
     def __init__(self, optimizer, multiplier, total_epoch, after_scheduler=None):
         super(GradualWarmupSchedulerV3, self).__init__(optimizer, multiplier, total_epoch, after_scheduler)
+
     def get_lr(self):
         if self.last_epoch > self.total_epoch:
             if self.after_scheduler:
@@ -569,9 +784,14 @@ class GradualWarmupSchedulerV3(GradualWarmupScheduler):
         if self.multiplier == 1.0:
             return [base_lr * (float(self.last_epoch) / self.total_epoch) for base_lr in self.base_lrs]
         else:
-            return [base_lr * ((self.multiplier - 1.) * self.last_epoch / self.total_epoch + 1.) for base_lr in self.base_lrs]
+            return [base_lr * ((self.multiplier - 1.) * self.last_epoch / self.total_epoch + 1.) for base_lr in
+                    self.base_lrs]
 
 
+# %% [markdown]
+# # Training
+
+# %% [code]
 def train_loop(df, fold, trn_idx, val_idx):
     loginfo(f"========== fold: {fold} training ==========")
 
@@ -683,64 +903,58 @@ def train_loop(df, fold, trn_idx, val_idx):
         if valid_loss_min_cnt >= CFG.n_early_stopping:
             if CFG.device == 'GPU':
                 torch.save({'model': model.state_dict()},
-                           outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
+                           outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
             elif CFG.device == 'TPU':
                 xm.save({'model': model.state_dict()},
-                        outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
+                        outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
             print("early_stopping")
             break
 
         if CFG.device == 'GPU':
             torch.save({'model': model.state_dict()},
-                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
+                       outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
         elif CFG.device == 'TPU':
             xm.save({'model': model.state_dict()},
-                    outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}_score{score}.pth')
+                    outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
 
     return preds, trues
 
 
+# %% [code]
 def main():
     oof_df = pd.DataFrame()
     oof_list = []
     for fold, (trn_idx, val_idx) in enumerate(folds):
-        if fold==0:
-            continue
-
         if fold in CFG.fold_list:
             preds, trues = train_loop(train_df, fold, trn_idx, val_idx)
             oof_list.append([preds, trues])
     return oof_list
 
 
+# %% [markdown]
+# # Main
 
-
-
+# %% [code]
 if __name__ == '__main__':
     print(CFG.suffix)
     if CFG.device == 'TPU':
         def _mp_fn(rank, flags):
             torch.set_default_tensor_type('torch.FloatTensor')
             a = main()
+
+
         FLAGS = {}
         xmp.spawn(_mp_fn, args=(FLAGS,), nprocs=CFG.nprocs, start_method='fork')
     elif CFG.device == 'GPU':
         oof_list = main()
 
-    # save as cpu
-    if CFG.device == 'TPU':
-        for fold in range(CFG.fold_num):
-            if fold in CFG.fold_list:
-                # best score
-                state = torch.load(outputdir+f'{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{cur_best_list[4]}.pth')
-                torch.save({'model': state['model'].to('cpu').state_dict(), 'preds': state['preds'], 'cur_best_list': state['cur_best_list']},
-                        outputdir+f'{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{cur_best_list[4]}_cpu.pth')
-
-
-
-
-
-
-
-
-
+# %% [code]
+# save as cpu
+if CFG.device == 'TPU':
+    for fold in range(CFG.fold_num):
+        if fold in CFG.fold_list:
+            # best score
+            state = torch.load(outputdir + f'{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{cur_best_list[4]}.pth')
+            torch.save({'model': state['model'].to('cpu').state_dict(), 'preds': state['preds'],
+                        'cur_best_list': state['cur_best_list']},
+                       outputdir + f'{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{cur_best_list[4]}_cpu.pth')
