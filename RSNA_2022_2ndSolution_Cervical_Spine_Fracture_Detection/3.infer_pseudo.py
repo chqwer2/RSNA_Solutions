@@ -218,7 +218,7 @@ study_train_df = study_train_df[~study_train_df["StudyInstanceUID"].isin(seg_gt_
 # %% [code] {"execution":{"iopub.status.busy":"2023-07-20T15:16:19.617521Z","iopub.execute_input":"2023-07-20T15:16:19.618822Z","iopub.status.idle":"2023-07-20T15:16:24.411722Z","shell.execute_reply.started":"2023-07-20T15:16:19.618781Z","shell.execute_reply":"2023-07-20T15:16:24.410675Z"}}
 train_slice_list = []
 # for file_name in tqdm(study_train_df["StudyInstanceUID"].values):
-for file_name in tqdm(study_train_df["StudyInstanceUID"].values[:30]):
+for file_name in tqdm(study_train_df["StudyInstanceUID"].values):
 
     train_image_path = glob(f"{datadir}/train_images/{file_name}/*")
     train_image_path = sorted(train_image_path, key=lambda x: int(x.split("/")[-1].replace(".dcm", "")))
@@ -238,10 +238,6 @@ train_df.to_csv(f'train_slice_list.csv', index=False)
 
 
 
-# %% [markdown] {"id":"RXBaZcUpQLqw"}
-# # Dataset
-
-# %% [code] {"executionInfo":{"elapsed":225885,"status":"ok","timestamp":1615451971076,"user":{"displayName":"徐铭","photoUrl":"https://lh3.googleusercontent.com/a-/AOh14GiblzBIU0N3bzEW-w5kOCgqAoahWcHJnTU5mI-A=s64","userId":"11772050295087096956"},"user_tz":-480},"id":"fuxNse_1M_r0","execution":{"iopub.status.busy":"2023-07-20T15:16:24.584346Z","iopub.execute_input":"2023-07-20T15:16:24.584783Z","iopub.status.idle":"2023-07-20T15:16:24.599437Z","shell.execute_reply.started":"2023-07-20T15:16:24.584744Z","shell.execute_reply":"2023-07-20T15:16:24.598194Z"}}
 # 构造 dataset类
 class TrainDataset(Dataset):
     def __init__(self, df, transform=None):
@@ -503,9 +499,11 @@ for step, (images, file_names, n_slice) in tqdm(enumerate(test_loader),total=len
             start_idx = bs_idx
             voxel_mask = []
             # voxels = []
+
         elif bs_idx == batch_size-1:
             voxel_mask.append(slice_mask[start_idx:batch_size])
             # voxels.append(slice_image[start_idx:batch_size])
+
 voxel_mask = torch.cat(voxel_mask, dim=0)
 if len(voxel_mask) > 0:
     croped_voxel, croped_voxel_mask = crop_voxel(voxel_mask, last_f_name)
