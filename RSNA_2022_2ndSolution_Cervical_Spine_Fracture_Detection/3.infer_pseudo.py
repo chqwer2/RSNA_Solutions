@@ -41,7 +41,10 @@ class CFG:
     model_arch = "efficientnet-b0"
     img_size = 512
     croped_img_size = 320  # 裁剪后的图片尺寸
-    weight_path = f"/kaggle/input/cervical-review/efficientnet-b0_109_fold0_epoch13.pth"
+    weight_path = f"./efficientnet-b0_109_fold0_epoch13_loss=0.052178958087850974.pth"
+
+
+
 
 
 # %% [markdown] {"id":"p4w3IC-Qvcyq"}
