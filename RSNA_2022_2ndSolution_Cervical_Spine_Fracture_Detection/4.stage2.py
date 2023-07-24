@@ -263,10 +263,10 @@ class MLPAttentionNetwork(nn.Module):
         att_scores = torch.softmax(self.proj_v(H), axis=1)  # (batch_size, seq_len)
         # print(f"att_scores shape:{att_scores.shape}")
 
-        attn_x = (x * att_scores).sum(1)  # (batch_size, hidden_dim)
+        attn_x = (x * att_scores + x).sum(1)  # (batch_size, hidden_dim)
 
-        # print(f"attn_x shape:{attn_x.shape}")
-        return attn_x + x
+        print(f"attn_x shape:{attn_x.shape}, x shape: {x.shape}")
+        return attn_x #+ x
 
 
 class RSNAClassifier(nn.Module):
