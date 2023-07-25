@@ -1,21 +1,15 @@
-
-from utils.imports import *
-from utils.CFG import stage2_CFG as CFG
-
-
 # %% [code]
 import os
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 datadir = '../../rsna_cervical_spine'
 
-
-
 libdir = '.'
 outputdir = '.'
 otherdir = '.'
-train_bs_ = 2
-valid_bs_ = 4
+train_bs_ = 4
+valid_bs_ = 8
 num_workers_ = 5
 
 
@@ -32,17 +26,17 @@ class CFG:
     target_cols = ["C1", "C2", "C3", "C4", "C5", "C6", "C7"]
     num_classes = 7
 
-    accum_iter = 4
+    accum_iter = 1
     max_grad_norm = 1000
     print_freq = 100
     normalize_mean = [0.4824, 0.4824, 0.4824]  # [0.485, 0.456, 0.406] [0.4824, 0.4824, 0.4824]
     normalize_std = [0.22, 0.22, 0.22]  # [0.229, 0.224, 0.225] [0.22, 0.22, 0.22]
 
-    suffix = "406"
-    fold_list = [0, 1, 2, 3, 4]
-    epochs = 20
-    model_arch = "tf_efficientnetv2_s"  # "resnest50d"  #  , resnest50d
-    img_size = 400
+    suffix = "401"
+    fold_list = [0]
+    epochs = 25
+    model_arch = "resnest50d"  # tf_efficientnetv2_s, resnest50d
+    img_size = 320
     optimizer = "AdamW"
     scheduler = "CosineAnnealingLR"
     loss_fn = "BCEWithLogitsLoss"
@@ -50,16 +44,17 @@ class CFG:
 
     warmup_epo = 1
     warmup_factor = 10
-    T_max = epochs - warmup_epo - 2
+    T_max = epochs - warmup_epo - 2 if scheduler_warmup == "GradualWarmupSchedulerV2" else \
+        epochs - warmup_epo - 1 if scheduler_warmup == "GradualWarmupSchedulerV3" else epochs - 1  # CosineAnnealingLR
 
     seq_len = 24
-    lr = 5e-5
-    min_lr = 1e-7
+    lr = 5e-4
+    min_lr = 1e-6
     weight_decay = 0
     dropout = 0.1
 
     gpu_parallel = False
-    n_early_stopping = 5
+    n_early_stopping = 4
     debug = False
     multihead = False
 
@@ -114,8 +109,13 @@ import pydicom as dicom
 import gc
 from torch.nn import DataParallel
 
-
-from torch.cuda.amp import autocast, GradScaler
+if CFG.device == 'TPU':
+    !pip
+    install - q
+    pytorch - ignite
+    import ignite.distributed as idist
+elif CFG.device == 'GPU':
+    from torch.cuda.amp import autocast, GradScaler
 
 # %% [markdown]
 # # helper
@@ -124,18 +124,35 @@ from torch.cuda.amp import autocast, GradScaler
 train_df = pd.read_pickle(f'{datadir}/vertebrae_df.pkl')
 submission_df = pd.read_csv(f'{datadir}/sample_submission.csv')
 
-train_df = train_df[
-    ~train_df["StudyInstanceUID"].isin(["1.2.826.0.1.3680043.20574", "1.2.826.0.1.3680043.29952"])].reset_index(
-    drop=True)
-
 gkf = GroupKFold(n_splits=CFG.fold_num)
 folds = gkf.split(X=train_df, y=None, groups=train_df['StudyInstanceUID'])
 
-
+train_df = train_df[train_df["StudyInstanceUID"] != "1.2.826.0.1.3680043.20574"].reset_index(drop=True)
+train_df = train_df[train_df["StudyInstanceUID"] != "1.2.826.0.1.3680043.29952"].reset_index(drop=True)
+train_df
 
 # %% [code]
+if CFG.device == 'TPU':
+    import os
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    VERSION = "1.7"
+    CP_V = "36" if ENV == "colab" else "37"
+    wheel = f"torch_xla-{VERSION}-cp{CP_V}-cp{CP_V}m-linux_x86_64.whl"
+    url = f"https://storage.googleapis.com/tpu-pytorch/wheels/{wheel}"
+    !pip3 - q
+    install
+    cloud - tpu - client == 0.10 $url
+    os.system('export XLA_USE_BF16=1')
+    import torch_xla.core.xla_model as xm
+    import torch_xla.distributed.parallel_loader as pl
+    import torch_xla.distributed.xla_multiprocessing as xmp
+
+    CFG.lr = CFG.lr * CFG.nprocs
+    CFG.train_bs = CFG.train_bs // CFG.nprocs
+    device = xm.xla_device()
+
+elif CFG.device == "GPU":
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 # %% [code]
@@ -267,12 +284,6 @@ class TrainDataset(Dataset):
         row = self.df.iloc[idx]
         study_id = row["StudyInstanceUID"]
         slice_num_list = row['slice_num_list']
-        before_image_size = row["before_image_size"]
-        y0 = row["y0"];
-        y1 = row["y1"];
-        z0 = row["z0"];
-        z1 = row["z1"];
-
         slice_list = []
         for s_num in slice_num_list:
             path = f"{datadir}/train_images/{study_id}/{s_num}.dcm"
@@ -288,8 +299,8 @@ class TrainDataset(Dataset):
             slice_list.append(np.zeros((imgh, imgw)))
 
         image = np.stack(slice_list, axis=2)  # 512*512*seq_len; 0-1
-        image = cv2.resize(image, (before_image_size, before_image_size))
-        image = image[y0:y1, z0:z1, :]    # TODO
+
+        assert image.shape == (imgh, imgw, CFG.seq_len)
 
         # transform
         if self.transform:
@@ -504,14 +515,14 @@ class RSNAClassifier(nn.Module):
             nn.Linear(128, 1)
         )
 
-        # for n, m in self.named_modules():
-        #     if isinstance(m, nn.GRU):
-        #         print(f"init {m}")
-        #         for param in m.parameters():
-        #             if len(param.shape) >= 2:
-        #                 nn.init.orthogonal_(param.data)
-        #             else:
-        #                 nn.init.normal_(param.data)
+        for n, m in self.named_modules():
+            if isinstance(m, nn.GRU):
+                print(f"init {m}")
+                for param in m.parameters():
+                    if len(param.shape) >= 2:
+                        nn.init.orthogonal_(param.data)
+                    else:
+                        nn.init.normal_(param.data)
 
     def forward(self, x):  # (B, seq_len, H, W)
         bs = x.size(0)
@@ -678,7 +689,7 @@ def train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler,
             if CFG.accum_iter > 1:
                 loss = loss / CFG.accum_iter
             scaler.scale(loss).backward()
-            grad_norm = 0  # torch.nn.utils.clip_grad_norm_(model.parameters(), CFG.max_grad_norm)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), CFG.max_grad_norm)
             if (step + 1) % CFG.accum_iter == 0:
                 scaler.step(optimizer)
                 scaler.update()
@@ -691,7 +702,7 @@ def train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler,
             if CFG.accum_iter > 1:
                 loss = loss / CFG.accum_iter
             loss.backward()
-            grad_norm = 0  # torch.nn.utils.clip_grad_norm_(model.parameters(), CFG.max_grad_norm)
+            grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), CFG.max_grad_norm)
             if (step + 1) % CFG.accum_iter == 0:
                 xm.optimizer_step(optimizer, barrier=True)
                 optimizer.zero_grad()
@@ -741,7 +752,9 @@ def valid_one_epoch(valid_loader, model, criterion, device):
         losses.update(loss.item(), batch_size)
         # record accuracy
         trues.append(labels.to('cpu').numpy())
-        preds.append(y_preds.to('cpu').numpy())
+        preds.append(y_preds.sigmoid().to('cpu').numpy())
+        if CFG.accum_iter > 1:
+            loss = loss / CFG.accum_iter
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -758,11 +771,7 @@ def valid_one_epoch(valid_loader, model, criterion, device):
 
     trues = np.concatenate(trues)
     predictions = np.concatenate(preds)
-    print(f"trues.shape: {trues.shape}")
-    print(f"predictions.shape: {predictions.shape}")
-    score = nn.BCEWithLogitsLoss()(torch.from_numpy(predictions).type(torch.float32),
-                                   torch.from_numpy(trues).type(torch.float32))
-    return losses.avg, predictions, trues, score
+    return losses.avg, predictions, trues
 
 
 # %% [markdown]
@@ -774,7 +783,7 @@ class GradualWarmupSchedulerV3(GradualWarmupScheduler):
         super(GradualWarmupSchedulerV3, self).__init__(optimizer, multiplier, total_epoch, after_scheduler)
 
     def get_lr(self):
-        if self.last_epoch > self.total_epoch:
+        if self.last_epoch >= self.total_epoch:
             if self.after_scheduler:
                 if not self.finished:
                     self.after_scheduler.base_lrs = [base_lr * self.multiplier for base_lr in self.base_lrs]
@@ -848,7 +857,7 @@ def train_loop(df, fold, trn_idx, val_idx):
     elif CFG.scheduler == 'CosineAnnealingWarmRestarts':
         scheduler = CosineAnnealingWarmRestarts(optimizer, T_0=CFG.T_0, T_mult=1, eta_min=CFG.min_lr, last_epoch=-1)
 
-    scheduler_warmup = GradualWarmupSchedulerV3(optimizer, multiplier=CFG.warmup_factor, total_epoch=CFG.warmup_epo,
+    scheduler_warmup = GradualWarmupSchedulerV3(optimizer, multiplier=10, total_epoch=CFG.warmup_epo,
                                                 after_scheduler=scheduler)
 
     # loss
@@ -875,15 +884,15 @@ def train_loop(df, fold, trn_idx, val_idx):
         loginfo(f"optimizer_lr:{optimizer.param_groups[0]['lr']}")
 
         start_time = time.time()
+
         avg_loss, cur_lr = train_one_epoch(train_loader, model, criterion, optimizer, epoch, scheduler, device)  # train
-        avg_val_loss, preds, trues, score = valid_one_epoch(valid_loader, model, criterion, device)  # valid
+        avg_val_loss, preds, _ = valid_one_epoch(valid_loader, model, criterion, device)  # valid
 
         # scoring
         elapsed = time.time() - start_time
 
         loginfo(
             f'Epoch {epoch} - avg_train_loss: {avg_loss:.4f}  avg_val_loss: {avg_val_loss:.4f}  time: {elapsed:.0f}s')
-        loginfo(f'Epoch {epoch} - valid score: {score:.4f}')
 
         if CFG.scheduler_warmup in ["GradualWarmupSchedulerV2", "GradualWarmupSchedulerV3"]:
             scheduler_warmup.step()
@@ -917,18 +926,15 @@ def train_loop(df, fold, trn_idx, val_idx):
             xm.save({'model': model.state_dict()},
                     outputdir + f'/{CFG.model_arch}_{CFG.suffix}_fold{fold}_epoch{epoch}.pth')
 
-    return preds, trues
+    return valid_folds
 
 
 # %% [code]
 def main():
     oof_df = pd.DataFrame()
-    oof_list = []
     for fold, (trn_idx, val_idx) in enumerate(folds):
         if fold in CFG.fold_list:
-            preds, trues = train_loop(train_df, fold, trn_idx, val_idx)
-            oof_list.append([preds, trues])
-    return oof_list
+            train_loop(train_df, fold, trn_idx, val_idx)
 
 
 # %% [markdown]
@@ -946,7 +952,7 @@ if __name__ == '__main__':
         FLAGS = {}
         xmp.spawn(_mp_fn, args=(FLAGS,), nprocs=CFG.nprocs, start_method='fork')
     elif CFG.device == 'GPU':
-        oof_list = main()
+        main()
 
 # %% [code]
 # save as cpu

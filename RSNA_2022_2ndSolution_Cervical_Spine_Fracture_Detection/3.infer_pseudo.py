@@ -39,7 +39,7 @@ class CFG:
     fold_list = [0]
 
     model_arch = "efficientnet-b0"
-    img_size = 512
+    img_size = 320
     croped_img_size = 320  # 裁剪后的图片尺寸
     weight_path = f"./efficientnet-b0_109_fold0_epoch13_loss=0.052178958087850974.pth"
 
@@ -230,7 +230,7 @@ for file_name in tqdm(study_train_df["StudyInstanceUID"].values):
         slice_num = int(path2.split("/")[-1].replace(".dcm", ""))
         train_slice_list.append([f"{file_name}_{slice_num}", file_name, slice_num, path1, path2, path3])
 
-# %% [code] {"execution":{"iopub.status.busy":"2023-07-20T15:16:24.413118Z","iopub.execute_input":"2023-07-20T15:16:24.413495Z","iopub.status.idle":"2023-07-20T15:16:24.582459Z","shell.execute_reply.started":"2023-07-20T15:16:24.413458Z","shell.execute_reply":"2023-07-20T15:16:24.581191Z"}}
+
 train_df = pd.DataFrame(train_slice_list, columns=["id", "StudyInstanceUID", "slice_num", "path1", "path2", "path3"])
 train_df = train_df.sort_values(['StudyInstanceUID', 'slice_num'], ascending=[True, True]).reset_index(drop=True)
 train_df.to_csv(f'train_slice_list.csv', index=False)
@@ -293,37 +293,7 @@ from albumentations.pytorch import ToTensorV2
 
 
 def get_transforms(data):
-    if data == 'train':
-        return Compose([
-            Resize(CFG.img_size, CFG.img_size, interpolation=cv2.INTER_NEAREST),
-            HorizontalFlip(p=0.5),
-            VerticalFlip(p=0.5),
-            ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.05, rotate_limit=10, p=0.5),
-            OneOf([
-                GridDistortion(num_steps=5, distort_limit=0.05, p=1.0),
-                OpticalDistortion(distort_limit=0.05, shift_limit=0.05, p=1.0),
-                ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0)
-            ], p=0.25),
-            CoarseDropout(max_holes=8, max_height=CFG.img_size[0] // 20, max_width=CFG.img_size[1] // 20,
-                          min_holes=5, fill_value=0, mask_fill_value=0, p=0.5),
-        ], p=1.0)
-
-    elif data == 'light_train':
-        return Compose([
-            Resize(CFG.img_size, CFG.img_size, interpolation=cv2.INTER_NEAREST),
-            HorizontalFlip(p=0.5),
-            # VerticalFlip(p=0.5),
-            ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.05, rotate_limit=10, p=0.5),
-            OneOf([
-                GridDistortion(num_steps=5, distort_limit=0.05, p=1.0),
-                # OpticalDistortion(distort_limit=0.05, shift_limit=0.05, p=1.0),
-                ElasticTransform(alpha=1, sigma=50, alpha_affine=50, p=1.0)
-            ], p=0.25),
-            # CoarseDropout(max_holes=8, max_height=CFG.img_size[0]//20, max_width=CFG.img_size[1]//20,
-            #              min_holes=5, fill_value=0, mask_fill_value=0, p=0.5),
-        ], p=1.0)
-
-    elif data == 'valid':
+    if data == 'valid':
         return Compose([
             Resize(CFG.img_size, CFG.img_size, interpolation=cv2.INTER_NEAREST),
         ])
@@ -365,10 +335,10 @@ def load_model(path):
 #     os.makedirs(f"{outputdir}/train_mask/{filename}", exist_ok=True)
 
 # %% [code] {"execution":{"iopub.status.busy":"2023-07-20T15:16:26.948798Z","iopub.execute_input":"2023-07-20T15:16:26.949667Z","iopub.status.idle":"2023-07-20T15:16:26.972843Z","shell.execute_reply.started":"2023-07-20T15:16:26.949625Z","shell.execute_reply":"2023-07-20T15:16:26.971472Z"}}
+
+vertebra_class = []
 slice_class_list = []
 voxel_crop_list = []
-
-
 def crop_voxel(voxel_mask, last_f_name):
     area_thr = 10
     # x
@@ -459,11 +429,6 @@ import gc
 
 gc.collect()
 
-# %% [code] {"execution":{"iopub.status.busy":"2023-07-20T15:16:27.257786Z","iopub.execute_input":"2023-07-20T15:16:27.258428Z","iopub.status.idle":"2023-07-20T15:16:31.889689Z","shell.execute_reply.started":"2023-07-20T15:16:27.258387Z","shell.execute_reply":"2023-07-20T15:16:31.888586Z"}}
-model = load_model(CFG.weight_path)
-model.eval()
-
-
 
 test_dataset = TrainDataset(train_df, transform=get_transforms("valid")) # get_transforms("valid")
 test_loader = DataLoader(test_dataset, batch_size=CFG.valid_bs, shuffle=False, num_workers=CFG.num_workers, pin_memory=True, drop_last=False)
@@ -481,7 +446,8 @@ for step, (images, file_names, n_slice) in tqdm(enumerate(test_loader),total=len
     y_pred = y_pred.sigmoid()
     slice_mask_max = torch.max(y_pred, 1) # bs*img_size*img_size
     slice_mask = torch.where((slice_mask_max.values)>0.5, slice_mask_max.indices+1, 0) # bs*img_size*img_size; 0-8 classes
-    slice_mask = torch.where(slice_mask==8,0,slice_mask).type(torch.uint8)
+
+    # slice_mask = torch.where(slice_mask==8,0,slice_mask).type(torch.uint8)   # ?
     # slice_mask = slice_mask.to('cpu').numpy().astype(np.uint8) # bs*img_size*img_size; 0-8 classes
     # slice_image = images[:, 1, :, :] # bs*img_size*img_size
 
@@ -595,6 +561,7 @@ new_df = []
 for idx, study_id, _, x0, x1, _, _, _, _, in tqdm(voxel_crop_df.itertuples(), total=len(voxel_crop_df)):
     one_study = all_slice_df[all_slice_df["StudyInstanceUID"] == study_id].reset_index(drop=True)
     new_df.append(one_study[x0:x1])
+
 new_df = pd.concat(new_df, axis=0).reset_index(drop=True)
 new_df  # 所有包含vertebra的slice
 
@@ -654,13 +621,10 @@ len(vertebrae_df_list) / (2019 * 7)
 vertebrae_df = pd.DataFrame(vertebrae_df_list, columns=["study_cid", "StudyInstanceUID", "cid", "slice_num_list", \
     "before_image_size", "x0", "x1", "y0", "y1", "z0", "z1", "label"])
 vertebrae_df.to_pickle(f"{datadir}/vertebrae_df.pkl")
+
 # vertebrae_df = pd.read_pickle(f"{datadir}/vertebrae_df.pkl")
-# vertebrae_df
-
-# %% [code]
 
 
-# %% [markdown]
 # ### study level
 
 # %% [code] {"execution":{"iopub.status.busy":"2023-07-20T15:17:00.077744Z","iopub.status.idle":"2023-07-20T15:17:00.078811Z","shell.execute_reply.started":"2023-07-20T15:17:00.078377Z","shell.execute_reply":"2023-07-20T15:17:00.078411Z"}}

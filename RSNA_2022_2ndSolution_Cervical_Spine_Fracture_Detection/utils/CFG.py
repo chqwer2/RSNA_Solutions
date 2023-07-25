@@ -31,7 +31,7 @@ class CFG:
     suffix = "109"
     fold_list = [0]
     epochs = 15
-    model_arch = "efficientnet-b0"
+    model_arch = 'tf_efficientnetv2_s'  # "efficientnet-b0"
     img_size = 320
     optimizer = "AdamW"
     scheduler = "CosineAnnealingLR"
